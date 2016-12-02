@@ -305,3 +305,39 @@
       (execute (:insert-into 'test-data :set 'a #()))
       (execute (:drop-table 'test-data)))
     (is (not (table-exists-p 'test-data)))))
+
+;; test timestamps in the dao
+(defclass time-test ()
+  ((id :accessor id :col-type integer :initarg :id :initform 0)
+   (created-at :accessor created-at :col-type timestamp :initarg :created-at
+               :initform (simple-date:universal-time-to-timestamp
+                          (get-universal-time))))
+  (:metaclass postmodern:dao-class)
+  (:table-name time-test)
+  (:keys id))
+
+(test dao-timestamp
+  (with-test-connection
+    (execute (dao-table-definition 'time-test))
+    (protect
+      (let ((dao (make-instance 'time-test :id 1)))
+        (insert-dao dao)
+        (is (dao-exists-p dao)))
+      (let ((dao (get-dao 'time-test 1)))
+        (update-dao dao))
+      (let ((now (simple-date:universal-time-to-timestamp
+                  (get-universal-time))))
+          (let ((dao (get-dao 'time-test 1)))
+            (setf (created-at dao) now)
+            (update-dao dao))
+          (let ((dao (get-dao 'time-test 1)))
+            (is (simple-date:time= now (created-at dao)))))
+      (let ((dao (make-instance 'time-test
+                                :id 2
+                                :created-at "2016-12-02 05:26:57.459133")))
+        (insert-dao dao))
+      (let ((dao (get-dao 'time-test 2)))
+        (is (simple-date:time= (simple-date:encode-timestamp 2016 12 2 5 26 57 459)
+                               (created-at dao))))
+      (execute (:drop-table 'time-test)))))
+
